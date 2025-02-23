@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Time Capsule</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <style>
+        /* Previous CSS styles remain the same */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f0f2f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .auth-section {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .capsule-form {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .capsules-list {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        .capsule-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+
+        input[type="text"],
+        input[type="password"],
+        input[type="email"],
+        textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        button {
+            background: #1a73e8;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #1557b0;
+        }
+
+        .image-preview {
+            max-width: 200px;
+            margin: 10px 0;
+        }
+
+        .loading {
+            display: none;
+            color: #666;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Digital Time Capsule</h1>
+            <p>Preserve your memories for the future</p>
+        </div>
+
+        <div class="auth-section" id="authSection">
+            <h2>Sign In / Sign Up</h2>
+            <input type="email" id="email" placeholder="Email">
+            <input type="password" id="password" placeholder="Password">
+            <button onclick="signIn()">Sign In</button>
+            <button onclick="signUp()">Sign Up</button>
+        </div>
+
+        <div class="capsule-form" id="capsuleForm">
+            <h2>Create New Time Capsule</h2>
+            <input type="text" id="capsuleTitle" placeholder="Title">
+            <textarea id="capsuleContent" placeholder="Your message"></textarea>
+            <input type="file" id="capsuleImage" accept="image/*">
+            <div id="loadingText" class="loading">Uploading image...</div>
+            <img id="imagePreview" class="image-preview">
+            <input type="date" id="unlockDate">
+<input type="time" id="unlockTime">  <!-- Added time input -->
+            <button onclick="createCapsule()">Save Capsule</button>
+            <button onclick="signOut()">Sign Out</button>
+        </div>
+
+        <div class="capsules-list" id="capsulesList">
+            <h2>Your Time Capsules</h2>
+            <div id="capsulesContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase configuration - you'll need to replace these with your own
+        // Import the functions you need from the SDKs you need
+//import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDblsUB5XyTttPTjfmnGi1hu5G-saDdHdU",
+  authDomain: "digital-time-capsule2.firebaseapp.com",
+  projectId: "digital-time-capsule2",
+  storageBucket: "digital-time-capsule2.firebasestorage.app",
+  messagingSenderId: "742059278731",
+  appId: "1:742059278731:web:07791b9ff4dbdb93732f8e"
+};
+
+// Move this part immediately after firebaseConfig definition
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+
+        // Imgur API configuration
+        const IMGUR_CLIENT_ID = 'ed0ac59ffb25e07'; // You'll need to replace this
+
+        // Auth state observer
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                document.getElementById('authSection').style.display = 'none';
+                document.getElementById('capsuleForm').style.display = 'block';
+                document.getElementById('capsulesList').style.display = 'block';
+                loadCapsules();
+            } else {
+                document.getElementById('authSection').style.display = 'block';
+                document.getElementById('capsuleForm').style.display = 'none';
+                document.getElementById('capsulesList').style.display = 'none';
+            }
+        });
+
+        // Authentication functions
+        async function signUp() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            try {
+                await auth.createUserWithEmailAndPassword(email, password);
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        async function signIn() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        function signOut() {
+            auth.signOut();
+        }
+
+        // Image preview
+        document.getElementById('capsuleImage').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('imagePreview').src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Upload image to Imgur
+        async function uploadImageToImgur(file) {
+            const formData = new FormData();
+            formData.append('image', file);
+
+            try {
+                const response = await fetch('https://api.imgur.com/3/image', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Client-ID ${IMGUR_CLIENT_ID}`
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    return data.data.link;
+                } else {
+                    throw new Error('Image upload failed');
+                }
+            } catch (error) {
+                console.error('Error uploading image:', error);
+                throw error;
+            }
+        }
+
+        // Create new capsule
+        async function createCapsule() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.error("User is not authenticated");
+        alert("You need to sign in first!");
+        return;
+    }
+
+    const title = document.getElementById('capsuleTitle').value;
+    const content = document.getElementById('capsuleContent').value;
+    const unlockDate = document.getElementById('unlockDate').value;
+    const unlockTime = document.getElementById('unlockTime').value;
+    const imageFile = document.getElementById('capsuleImage').files[0];
+
+    if (!unlockDate || !unlockTime) {
+        alert("Please select both date and time for unlocking!");
+        return;
+    }
+
+    // Combine date and time into a full timestamp
+    const unlockTimestamp = new Date(`${unlockDate}T${unlockTime}:00`).toISOString();
+
+    try {
+        let imageUrl = '';
+        if (imageFile) {
+            document.getElementById('loadingText').style.display = 'block';
+            imageUrl = await uploadImageToImgur(imageFile);
+        }
+
+        const capsuleData = {
+            userId: user.uid,
+            title,
+            content,
+            imageUrl,
+            unlockTimestamp,  // Store combined date & time as a timestamp
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+
+        console.log("Saving capsule data:", capsuleData);
+
+        await db.collection('capsules').add(capsuleData);
+        console.log("Capsule successfully saved!");
+
+        // Clear form fields
+        document.getElementById('capsuleTitle').value = '';
+        document.getElementById('capsuleContent').value = '';
+        document.getElementById('capsuleImage').value = '';
+        document.getElementById('imagePreview').src = '';
+        document.getElementById('unlockDate').value = '';
+        document.getElementById('unlockTime').value = '';
+        document.getElementById('loadingText').style.display = 'none';
+
+        loadCapsules();
+    } catch (error) {
+        console.error("Error saving capsule:", error);
+        alert("Failed to save capsule: " + error.message);
+    }
+}
+
+
+        // Load user's capsules
+        async function loadCapsules() {
+    const user = auth.currentUser;
+    if (!user) {
+        console.error("User is not authenticated");
+        return;
+    }
+
+    console.log("Loading capsules for user:", user.uid);
+
+    try {
+        const capsulesSnapshot = await db.collection('capsules').get();
+        console.log("Total capsules fetched:", capsulesSnapshot.docs.length);
+
+        const container = document.getElementById('capsulesContainer');
+        container.innerHTML = ''; // Clear previous content
+
+        const userCapsules = capsulesSnapshot.docs
+            .map(doc => doc.data())
+            .filter(capsule => capsule.userId === user.uid) // Filter client-side
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Sort by createdAt
+
+        if (userCapsules.length === 0) {
+            console.log("No capsules found for this user.");
+            container.innerHTML = "<p>No time capsules found.</p>";
+            return;
+        }
+
+        userCapsules.forEach(capsule => {
+            console.log("Capsule Data:", capsule);
+
+            const currentDateTime = new Date(); // Get current date & time
+            const unlockDateTime = new Date(capsule.unlockTimestamp); // Stored unlock timestamp
+
+            const isUnlocked = currentDateTime >= unlockDateTime; // Compare both date and time
+
+            const capsuleElement = document.createElement('div');
+            capsuleElement.className = 'capsule-item';
+            capsuleElement.innerHTML = `
+                <h3>${capsule.title}</h3>
+                <p>Unlock date & time: ${unlockDateTime.toLocaleString()}</p>
+                ${isUnlocked ? `
+                    <p>${capsule.content}</p>
+                    ${capsule.imageUrl ? `<img src="${capsule.imageUrl}" class="image-preview">` : ''}
+                ` : '<p>This capsule is still locked</p>'}
+            `;
+            container.appendChild(capsuleElement);
+        });
+
+    } catch (error) {
+        console.error("Error fetching capsules:", error);
+        alert("Failed to load capsules: " + error.message);
+    }
+}
+    </script>
+</body>
+</html>
